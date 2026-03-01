@@ -31,4 +31,9 @@ jobs:
           printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
           echo "Use custom config: "
           cat config/custom.yaml
+          echo "ARXIV_QUERY=[$ARXIV_QUERY]"
+          python - <<'PY'
+          import os
+          print("ARXIV_QUERY raw:", repr(os.environ.get("ARXIV_QUERY")))
+          PY
           uv run src/zotero_arxiv_daily/main.py
