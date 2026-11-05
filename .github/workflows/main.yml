@@ -2,7 +2,8 @@ name: Send emails daily
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 22 * * *'
+    # Avoid the busy start of the hour and refresh the schedule registration.
+    - cron: '17 22 * * *'
 
 jobs:
   calculate-and-send:
@@ -18,6 +19,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Run script
+        id: delivery
         env:
           ZOTERO_ID: ${{ secrets.ZOTERO_ID }}
           ZOTERO_KEY: ${{ secrets.ZOTERO_KEY }}
@@ -31,4 +33,24 @@ jobs:
           printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
           echo "Use custom config: "
           cat config/custom.yaml
-          uv run src/zotero_arxiv_daily/main.py
+          set -o pipefail
+          uv run src/zotero_arxiv_daily/main.py 2>&1 | tee "$RUNNER_TEMP/delivery.log"
+
+      - name: Delivery summary
+        if: always()
+        env:
+          DELIVERY_OUTCOME: ${{ steps.delivery.outcome }}
+        run: |
+          echo "## Daily paper delivery" >> "$GITHUB_STEP_SUMMARY"
+          echo "Triggered by: $GITHUB_EVENT_NAME; script: $DELIVERY_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DELIVERY_OUTCOME" != "success" ]; then
+            echo "Delivery failed or did not run. Check the job logs." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -q 'Email sent successfully' "$RUNNER_TEMP/delivery.log"; then
+            echo "Email sent successfully." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -q 'No new papers found' "$RUNNER_TEMP/delivery.log"; then
+            echo "No new papers in the current feed; no email was sent." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Script ended without a confirmed delivery or an empty-feed result."
+            echo "No confirmed delivery result. Check the job logs." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

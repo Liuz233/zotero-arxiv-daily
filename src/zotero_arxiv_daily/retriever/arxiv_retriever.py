@@ -17,15 +17,31 @@ class ArxivRetriever(BaseRetriever):
             raise ValueError("category must be specified for arxiv.")
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
         client = arxiv.Client(num_retries=10,delay_seconds=10)
+        if self.config.executor.debug:
+            # A delivery test must work even when today's RSS feed is empty.
+            query = ' OR '.join(f'cat:{category}' for category in self.config.source.arxiv.category)
+            search = arxiv.Search(
+                query=query,
+                max_results=5,
+                sort_by=arxiv.SortCriterion.SubmittedDate,
+                sort_order=arxiv.SortOrder.Descending,
+            )
+            papers = list(client.results(search))
+            if not papers:
+                raise RuntimeError("arXiv delivery test returned no papers; email delivery was not tested.")
+            return papers
         query = '+'.join(self.config.source.arxiv.category)
         # Get the latest paper from arxiv rss feed
         feed = feedparser.parse(f"https://rss.arxiv.org/atom/{query}")
+        if feed.get('status', 200) != 200 or feed.get('bozo', False):
+            raise RuntimeError(f"Failed to retrieve arXiv RSS feed (HTTP {feed.get('status', 'unknown')}).")
+        if not feed.feed.get('title'):
+            raise RuntimeError("arXiv RSS response has no feed title; refusing to treat it as an empty day.")
         if 'Feed error for query' in feed.feed.title:
             raise Exception(f"Invalid ARXIV_QUERY: {query}.")
         raw_papers = []
         all_paper_ids = [i.id.removeprefix("oai:arXiv.org:") for i in feed.entries if i.get("arxiv_announce_type","new") == 'new']
-        if self.config.executor.debug:
-            all_paper_ids = all_paper_ids[:10]
+        logger.info(f"arXiv RSS updated {feed.feed.get('updated', 'unknown')}: {len(all_paper_ids)} new papers")
 
         # Get full information of each paper from arxiv api
         bar = tqdm(total=len(all_paper_ids))

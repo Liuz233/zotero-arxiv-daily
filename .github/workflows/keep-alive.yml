@@ -3,8 +3,8 @@ name: Keep Alive
 on:
   workflow_dispatch:
   schedule:
-    # Run every 30 days at 00:00 UTC to keep the repository active
-    - cron: '0 0 */30 * *'
+    # Run weekly; */30 in the day-of-month field means days 1 and 31.
+    - cron: '23 4 * * 1'
 
 jobs:
   keep-alive:
