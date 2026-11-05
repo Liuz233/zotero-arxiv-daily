@@ -62,8 +62,4 @@ Abstract: Time series forecasting plays a vital role in critical domains like en
     <dc:rights>http://creativecommons.org/licenses/by/4.0/</dc:rights>
     <dc:creator>Yunfeng Ge, Ming Jin, Yiji Zhao, Hongyan Li, Bo Du, Chang Xu, Shirui Pan</dc:creator>
   </entry>
-  <entry>
-    <id>oai:arXiv.org:2508.13435v1</id>
-    <title>SVDformer: Direction-Aware Spectral Graph Embedding Learning via SVD and Transformer</title>
-    <updated>2025-08-20T04:00:19.899011+00:00</updated>
-    <link href="https://arxiv.org/abs/2508.13435" rel="alternate" type="text/html"/>
+</feed>
