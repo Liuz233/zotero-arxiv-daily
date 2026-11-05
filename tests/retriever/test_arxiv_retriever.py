@@ -1,8 +1,15 @@
 from zotero_arxiv_daily.retriever.arxiv_retriever import ArxivRetriever
 import feedparser
 import pickle
+from datetime import datetime, timezone
 
 def test_arxiv_retriever(config, monkeypatch):
+    # This integration fixture represents the August 20, 2025 release.
+    class FixtureDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2025, 8, 21, tzinfo=timezone.utc)
+    monkeypatch.setattr('zotero_arxiv_daily.retriever.arxiv_retriever.datetime', FixtureDateTime)
 
     parsed_result = feedparser.parse("tests/retriever/arxiv_rss_example.xml")
     raw_parser = feedparser.parse

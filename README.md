@@ -113,6 +113,7 @@ zotero:
 source:
   arxiv:
     category: null # The categories of target arxiv papers. Find the abbr of your research area from [here](https://arxiv.org/category_taxonomy). Example: ["cs.AI","cs.CV","cs.LG","cs.CL"]
+    max_age_days: 7 # Maximum age by actual arXiv submission date, not the RSS announcement date.
   biorxiv:
     category: null # The categories of target biorxiv papers. Find categories from [here](https://www.biorxiv.org/). Example: ["biochemistry","animal behavior and cognition"]
   medrxiv:
@@ -163,6 +164,8 @@ That's all! Now you can test the workflow by manually triggering it:
 > The Test-Workflow Action is the debug version of the main workflow (Send-emails-daily), which always retrieve 5 arxiv papers regardless of the date. While the main workflow will be automatically triggered everyday and retrieve new papers released yesterday. There is no new arxiv paper at weekends and holiday, in which case you may see "No new papers found" in the log of main workflow.
 
 Then check the log and the receiver email after it finishes.
+
+The Test workflow selects five recent submissions within `source.arxiv.max_age_days` (seven days by default). Daily delivery checks actual submission dates too: old papers mislabeled as new by RSS are excluded. If all RSS results are stale, it queries the previous UTC day's submissions directly. Emails display each paper's actual submission date in UTC.
 
 By default, the main workflow runs on 22:17 UTC everyday. You can change this time by editting the workflow config `.github/workflows/main.yml`. GitHub may delay scheduled runs. The run summary reports whether mail was sent or the current feed contained no new papers.
 

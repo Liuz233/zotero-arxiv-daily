@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
+from datetime import datetime, timedelta, timezone
 
 import arxiv
 import feedparser
@@ -17,7 +18,7 @@ def make_retriever(debug=False):
 
 def test_debug_uses_recent_search_without_rss(monkeypatch):
     client = Mock()
-    papers = [object() for _ in range(5)]
+    papers = [SimpleNamespace(published=datetime.now(timezone.utc)-timedelta(days=1)) for _ in range(5)]
     client.results.return_value = iter(papers)
     monkeypatch.setattr(arxiv, 'Client', Mock(return_value=client))
     parse = Mock(side_effect=AssertionError('Debug delivery must not depend on RSS'))
@@ -25,7 +26,7 @@ def test_debug_uses_recent_search_without_rss(monkeypatch):
 
     assert make_retriever(debug=True)._retrieve_raw_papers() == papers
     search = client.results.call_args.args[0]
-    assert search.query == 'cat:cs.AI OR cat:cs.CL'
+    assert search.query.startswith('(cat:cs.AI OR cat:cs.CL) AND submittedDate:[')
     assert search.max_results == 5
     assert search.sort_by == arxiv.SortCriterion.SubmittedDate
     assert search.sort_order == arxiv.SortOrder.Descending
@@ -72,9 +73,43 @@ def test_daily_feed_keeps_new_announcements_only(monkeypatch):
     )
     monkeypatch.setattr(feedparser, 'parse', Mock(return_value=response))
     client = Mock()
-    paper = object()
+    paper = SimpleNamespace(published=datetime.now(timezone.utc)-timedelta(days=1))
     client.results.return_value = iter([paper])
     monkeypatch.setattr(arxiv, 'Client', Mock(return_value=client))
 
     assert make_retriever()._retrieve_raw_papers() == [paper]
     assert client.results.call_args.args[0].id_list == ['2611.00001']
+
+
+def test_stale_rss_uses_date_limited_fallback(monkeypatch):
+    now = datetime.now(timezone.utc)
+    yesterday = now.replace(hour=12, minute=0, second=0, microsecond=0)-timedelta(days=1)
+    stale = SimpleNamespace(published=now-timedelta(days=60))
+    fresh = SimpleNamespace(published=yesterday)
+    response = feedparser.FeedParserDict(status=200, bozo=False,
+        feed=feedparser.FeedParserDict(title='arXiv updates'),
+        entries=[feedparser.FeedParserDict(id='oai:arXiv.org:2611.00001')])
+    monkeypatch.setattr(feedparser, 'parse', Mock(return_value=response))
+    client = Mock()
+    client.results.side_effect = [iter([stale]), iter([fresh])]
+    monkeypatch.setattr(arxiv, 'Client', Mock(return_value=client))
+    assert make_retriever()._retrieve_raw_papers() == [fresh]
+    assert 'submittedDate:[' in client.results.call_args.args[0].query
+
+
+def test_stale_date_search_cannot_pass_as_fresh(monkeypatch):
+    client = Mock()
+    client.results.return_value = iter([SimpleNamespace(published=datetime.now(timezone.utc)-timedelta(days=60))])
+    monkeypatch.setattr(arxiv, 'Client', Mock(return_value=client))
+    with pytest.raises(RuntimeError, match='refusing to send stale'):
+        make_retriever(debug=True)._retrieve_raw_papers()
+
+
+def test_email_displays_actual_submission_date():
+    from zotero_arxiv_daily.construct_email import render_email
+    from zotero_arxiv_daily.protocol import Paper
+    paper = Paper(source='arxiv', title='Fresh paper', authors=[], abstract='', url='https://arxiv.org',
+        submitted_date=datetime(2026, 11, 4, tzinfo=timezone.utc))
+    html = render_email([paper])
+    assert 'Submitted (UTC):' in html
+    assert '2026-11-04' in html
